@@ -1,0 +1,341 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "IAUE Student Hub Backend API",
+    "version": "1.0.0",
+    "description": "Production REST API for IAUE Student Hub backend featuring automated web scraping, academic synchronization, course conflict detection, and administrative review."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Current Server Host"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Enter JWT Bearer token obtained from /api/v1/auth/login"
+      }
+    },
+    "schemas": {
+      "ApiResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "message": { "type": "string" },
+          "data": { "type": "object" },
+          "meta": { "type": "object", "nullable": true }
+        }
+      },
+      "ApiError": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": false },
+          "message": { "type": "string" },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string" },
+              "details": { "nullable": true }
+            }
+          }
+        }
+      },
+      "ScraperSource": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "name": { "type": "string" },
+          "baseUrl": { "type": "string" },
+          "sourceType": {
+            "type": "string",
+            "enum": ["website", "news", "portal", "academic", "oer", "document"]
+          },
+          "enabled": { "type": "boolean" },
+          "crawlEnabled": { "type": "boolean" },
+          "scrapeIntervalMinutes": { "type": "integer" },
+          "lastRunAt": { "type": "string", "format": "date-time", "nullable": true },
+          "lastSuccessAt": { "type": "string", "format": "date-time", "nullable": true },
+          "lastFailureAt": { "type": "string", "format": "date-time", "nullable": true },
+          "lastError": { "type": "string", "nullable": true },
+          "priority": { "type": "integer" },
+          "allowedPaths": { "type": "array", "items": { "type": "string" } },
+          "blockedPaths": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "ScraperRun": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "sourceId": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["running", "completed", "failed", "partial"]
+          },
+          "startedAt": { "type": "string", "format": "date-time" },
+          "completedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "pagesVisited": { "type": "integer" },
+          "pagesSkipped": { "type": "integer" },
+          "itemsFound": { "type": "integer" },
+          "itemsCreated": { "type": "integer" },
+          "itemsUpdated": { "type": "integer" },
+          "itemsUnchanged": { "type": "integer" },
+          "itemsRejected": { "type": "integer" },
+          "durationMs": { "type": "integer" },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": { "type": "string" },
+                "message": { "type": "string" },
+                "timestamp": { "type": "string", "format": "date-time" }
+              }
+            }
+          }
+        }
+      },
+      "ScraperChange": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "sourceId": { "type": "string" },
+          "entityType": { "type": "string", "enum": ["course", "programme", "department", "faculty", "announcement", "resource"] },
+          "entityId": { "type": "string" },
+          "changeType": { "type": "string", "enum": ["created", "updated", "removed"] },
+          "previousHash": { "type": "string", "nullable": true },
+          "newHash": { "type": "string" },
+          "changedFields": { "type": "object" },
+          "detectedAt": { "type": "string", "format": "date-time" },
+          "reviewStatus": { "type": "string", "enum": ["pending", "approved", "ignored"] },
+          "notes": { "type": "string" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Admin & student login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "example": "admin@iauestudenthub.ng" },
+                  "password": { "type": "string", "example": "AdminSecurePassword123!" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Login successful" },
+          "401": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/api/v1/admin/scrapers/health": {
+      "get": {
+        "tags": ["Admin - Scraper"],
+        "summary": "Check scraper subsystem health and diagnostics",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Aggregated scraper diagnostics and health status" },
+          "401": { "description": "Unauthorized" },
+          "403": { "description": "Admin access required" }
+        }
+      }
+    },
+    "/api/v1/admin/scrapers": {
+      "get": {
+        "tags": ["Admin - Scraper"],
+        "summary": "List all official IAUE scraper sources",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List of scraper sources" }
+        }
+      }
+    },
+    "/api/v1/admin/scrapers/{id}": {
+      "get": {
+        "tags": ["Admin - Scraper"],
+        "summary": "Get scraper source by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Source details" },
+          "404": { "description": "Source not found" }
+        }
+      },
+      "patch": {
+        "tags": ["Admin - Scraper"],
+        "summary": "Update scraper source parameters",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": { "type": "boolean" },
+                  "crawlEnabled": { "type": "boolean" },
+                  "scrapeIntervalMinutes": { "type": "integer" },
+                  "priority": { "type": "integer" },
+                  "allowedPaths": { "type": "array", "items": { "type": "string" } },
+                  "blockedPaths": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Updated source" }
+        }
+      }
+    },
+    "/api/v1/admin/scrapers/{id}/run": {
+      "post": {
+        "tags": ["Admin - Scraper"],
+        "summary": "Manually trigger immediate scraper run for a source",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Scraper run executed" }
+        }
+      }
+    },
+    "/api/v1/admin/scraper-runs": {
+      "get": {
+        "tags": ["Admin - Scraper"],
+        "summary": "List scraper audit history and execution runs",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer" } },
+          { "name": "status", "in": "query", "schema": { "type": "string" } },
+          { "name": "sourceId", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "List of scraper runs" }
+        }
+      }
+    },
+    "/api/v1/admin/scraper-runs/{id}": {
+      "get": {
+        "tags": ["Admin - Scraper"],
+        "summary": "Get scraper run details and error logs",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Run detail with diagnostics" }
+        }
+      }
+    },
+    "/api/v1/admin/scraper-changes": {
+      "get": {
+        "tags": ["Admin - Scraper"],
+        "summary": "List detected changes, pending reviews, and unit conflicts",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "reviewStatus", "in": "query", "schema": { "type": "string", "enum": ["pending", "approved", "ignored"] } },
+          { "name": "entityType", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "List of changes" }
+        }
+      }
+    },
+    "/api/v1/admin/scraper-changes/{id}": {
+      "get": {
+        "tags": ["Admin - Scraper"],
+        "summary": "Get scraper change detail",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Change detail" }
+        }
+      }
+    },
+    "/api/v1/admin/scraper-changes/{id}/approve": {
+      "post": {
+        "tags": ["Admin - Scraper"],
+        "summary": "Approve pending change and apply modifications to database",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Change approved and applied" }
+        }
+      }
+    },
+    "/api/v1/admin/scraper-changes/{id}/ignore": {
+      "post": {
+        "tags": ["Admin - Scraper"],
+        "summary": "Ignore pending change without modifying database",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Change ignored" }
+        }
+      }
+    },
+    "/api/v1/announcements": {
+      "get": {
+        "tags": ["Public"],
+        "summary": "List official IAUE announcements with pagination and filtering",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer" } },
+          { "name": "category", "in": "query", "schema": { "type": "string" } },
+          { "name": "q", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "List of announcements with IAUE source link" }
+        }
+      }
+    },
+    "/api/v1/courses": {
+      "get": {
+        "tags": ["Public"],
+        "summary": "List courses with explicit credit units transparency",
+        "parameters": [
+          { "name": "level", "in": "query", "schema": { "type": "integer" } },
+          { "name": "q", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "List of courses" }
+        }
+      }
+    },
+    "/api/v1/faculties": {
+      "get": {
+        "tags": ["Public"],
+        "summary": "List faculties and associated departments",
+        "responses": {
+          "200": { "description": "Faculties and departments" }
+        }
+      }
+    },
+    "/api/v1/resources": {
+      "get": {
+        "tags": ["Public"],
+        "summary": "List OER materials and official documents",
+        "parameters": [
+          { "name": "type", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "List of academic resources" }
+        }
+      }
+    }
+  }
+}

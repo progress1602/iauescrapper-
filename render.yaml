@@ -1,0 +1,49 @@
+services:
+  - type: web
+    name: iaue-student-hub-backend
+    env: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: ADMIN_EMAIL
+        value: admin@iauestudenthub.ng
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SCRAPER_ENABLED
+        value: "true"
+      - key: SCRAPER_NEWS_INTERVAL_MINUTES
+        value: "30"
+      - key: SCRAPER_PORTAL_INTERVAL_MINUTES
+        value: "30"
+      - key: SCRAPER_ACADEMIC_INTERVAL_MINUTES
+        value: "720"
+      - key: SCRAPER_OER_INTERVAL_MINUTES
+        value: "360"
+      - key: SCRAPER_DOCUMENT_INTERVAL_MINUTES
+        value: "360"
+      - key: SCRAPER_MAX_CONCURRENCY
+        value: "2"
+      - key: SCRAPER_REQUEST_TIMEOUT_MS
+        value: "15000"
+      - key: SCRAPER_MAX_RETRIES
+        value: "3"
+      - key: SCRAPER_DELAY_MS
+        value: "1500"
+      - key: SCRAPER_MAX_PAGES_PER_RUN
+        value: "200"
+      - key: SCRAPER_MAX_CRAWL_DEPTH
+        value: "3"
+      - key: SCRAPER_USER_AGENT
+        value: "IAUE-Student-Hub/1.0 (+https://iauestudenthub.ng)"
