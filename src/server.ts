@@ -1,5 +1,5 @@
 import http from 'http';
-import app from './app';
+import app, { initializeApollo } from './app';
 import { env } from './config/env';
 import { connectDatabase, disconnectDatabase } from './config/database';
 import { scraperScheduler } from './scrapers/jobs/scraperScheduler';
@@ -11,6 +11,10 @@ async function bootstrap(): Promise<void> {
     console.log('Connecting to database...');
     await connectDatabase();
 
+    // Initialize Apollo Server GraphQL & Embedded Sandbox
+    console.log('Initializing Apollo GraphQL Server...');
+    await initializeApollo();
+
     // Start background scraper scheduler if enabled
     scraperScheduler.start();
 
@@ -18,6 +22,8 @@ async function bootstrap(): Promise<void> {
     server.listen(env.PORT, () => {
       console.log(`=======================================================`);
       console.log(`🚀 IAUE Student Hub Backend listening on port ${env.PORT}`);
+      console.log(`🪐 Apollo Playground  : http://localhost:${env.PORT}/apollo`);
+      console.log(`📊 GraphQL Endpoint   : http://localhost:${env.PORT}/graphql`);
       console.log(`📚 Swagger Playground : http://localhost:${env.PORT}/playground`);
       console.log(`📖 Scalar API Docs     : http://localhost:${env.PORT}/scalar`);
       console.log(`⚙️  OpenAPI Spec JSON  : http://localhost:${env.PORT}/openapi.json`);

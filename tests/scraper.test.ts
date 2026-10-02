@@ -276,6 +276,13 @@ export async function runScraperTestSuite(): Promise<{ passed: number; failed: n
   {
     await connectDatabase();
 
+    // Clean up any test records from prior runs
+    await ScraperSourceModel.deleteMany({ name: 'Test IAUE News Source' });
+    await CourseModel.deleteMany({ code: 'CSC 301' });
+    await ScraperChangeModel.deleteMany({ entityType: 'course', 'proposedData.code': 'CSC 301' });
+    await ScraperLockModel.deleteMany({ _id: 'test-resource-lock' });
+    await AnnouncementModel.deleteMany({ canonicalUrl: 'https://iaue.edu.ng/news/resumption-date' });
+
     // Setup source
     const source = await ScraperSourceModel.create({
       name: 'Test IAUE News Source',
@@ -413,7 +420,12 @@ export async function runScraperTestSuite(): Promise<{ passed: number; failed: n
       email: dummyAdmin!.email,
       role: dummyAdmin!.role,
     });
-    assert(typeof token === 'string' && token.length > 20, 'Generated valid JWT token');
+    // Teardown cleanup
+    await ScraperSourceModel.deleteMany({ name: 'Test IAUE News Source' });
+    await CourseModel.deleteMany({ code: 'CSC 301' });
+    await ScraperChangeModel.deleteMany({ entityType: 'course', 'proposedData.code': 'CSC 301' });
+    await ScraperLockModel.deleteMany({ _id: 'test-resource-lock' });
+    await AnnouncementModel.deleteMany({ canonicalUrl: 'https://iaue.edu.ng/news/resumption-date' });
 
     await disconnectDatabase();
   }

@@ -8,10 +8,11 @@ import { scraperAdminRoutes } from './scrapers/routes/scraperAdmin.routes';
 import { publicRoutes } from './routes/public.routes';
 import { errorHandler } from './middleware/errorHandler';
 import { sendError } from './utils/response';
+import { setupApolloServer } from './graphql/apollo';
 
 export const app = express();
 
-// CORS Middleware
+// Bulletproof CORS Middleware: completely eliminates CORS errors across browsers, sandboxes, and tools
 app.use((req: Request, res: Response, next: NextFunction) => {
   const origin = req.headers.origin;
   if (origin) {
@@ -24,10 +25,15 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS');
   res.setHeader(
     'Access-Control-Allow-Headers',
-    'Origin, X-Requested-With, Content-Type, Accept, Authorization, *'
+    'Origin, X-Requested-With, Content-Type, Accept, Authorization, apollo-require-preflight, x-apollo-operation-name, *'
+  );
+  res.setHeader(
+    'Access-Control-Expose-Headers',
+    'Origin, Content-Type, Accept, Authorization, apollo-require-preflight, x-apollo-operation-name, *'
   );
   res.setHeader('Access-Control-Max-Age', '86400');
 
+  // Immediately respond to preflight OPTIONS requests without routing
   if (req.method === 'OPTIONS') {
     res.sendStatus(204);
     return;
@@ -77,24 +83,29 @@ app.get('/', (_req: Request, res: Response) => {
       <title>IAUE Student Hub Backend API</title>
       <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 40px 20px; display: flex; justify-content: center; }
-        .container { max-width: 800px; width: 100%; background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 32px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); }
+        .container { max-width: 820px; width: 100%; background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 32px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); }
         h1 { color: #38bdf8; margin-top: 0; font-size: 26px; }
         p { color: #94a3b8; line-height: 1.6; }
         .badge { display: inline-block; padding: 4px 10px; background: #10b981; color: #fff; border-radius: 9999px; font-size: 12px; font-weight: bold; margin-bottom: 16px; }
         .btn-group { display: flex; gap: 12px; margin: 24px 0; flex-wrap: wrap; }
         .btn { display: inline-block; padding: 10px 18px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; transition: all 0.2s; }
+        .btn-apollo { background: #3f20ba; color: #fff; border: 1px solid #6366f1; }
+        .btn-apollo:hover { background: #4f46e5; }
         .btn-primary { background: #0284c7; color: #fff; }
+        .btn-primary:hover { background: #0369a1; }
         .btn-secondary { background: #334155; color: #e2e8f0; }
+        .btn-secondary:hover { background: #475569; }
         .disclaimer { margin-top: 24px; padding: 14px; background: #0f172a; border-left: 4px solid #f59e0b; border-radius: 4px; font-size: 13px; color: #cbd5e1; }
       </style>
     </head>
     <body>
       <div class="container">
         <div class="badge">● API OPERATIONAL</div>
-        <h1>IAUE Student Hub Backend</h1>
-        <p>Production-ready REST backend featuring automated web scraping, academic synchronization, course credit-unit protection, and administrative review for Ignatius Ajuru University of Education students.</p>
+        <h1>IAUE Student Hub Backend & APIs</h1>
+        <p>Production-ready REST & GraphQL backend featuring automated web scraping, academic synchronization, course credit-unit protection, and administrative review for Ignatius Ajuru University of Education students.</p>
         
         <div class="btn-group">
+          <a href="/apollo" class="btn btn-apollo">🚀 Open Apollo Sandbox Playground</a>
           <a href="/playground" class="btn btn-primary">🎮 Swagger Playground</a>
           <a href="/scalar" class="btn btn-secondary">📚 Scalar Documentation</a>
           <a href="/openapi.json" class="btn btn-secondary" target="_blank">⚙️ OpenAPI Spec (JSON)</a>
@@ -111,13 +122,26 @@ app.get('/', (_req: Request, res: Response) => {
   `);
 });
 
-// API Routes
+// Mount API Routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/admin', scraperAdminRoutes);
 app.use('/api/v1', publicRoutes);
 
-// 404 Handler
-app.use((_req: Request, res: Response) => {
+// Initialize Apollo Server asynchronously
+let apolloInitialized = false;
+export async function initializeApollo() {
+  if (!apolloInitialized) {
+    await setupApolloServer(app);
+    apolloInitialized = true;
+  }
+}
+
+// 404 Handler (only for non-GraphQL routes)
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.path === '/graphql' || req.path === '/apollo') {
+    next();
+    return;
+  }
   sendError(res, 'Requested route not found', 404, 'NOT_FOUND');
 });
 
